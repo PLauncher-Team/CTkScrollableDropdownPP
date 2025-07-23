@@ -4,11 +4,11 @@ import re
 
 class CTkScrollableDropdown(customtkinter.CTkToplevel):
 
-    def __init__(self, attach, x=None, y=None, button_color=None, height: int = 55, width: int = None,
+    def __init__(self, attach, x=None, y=None, button_color=None, height: int = None, width: int = None,
                  fg_color=None, button_height: int = 20, justify="center", scrollbar_button_color=None,
                  scrollbar=True, scrollbar_button_hover_color=None, frame_border_width=0, values=[],
                  command=None, image_values=[], alpha: float = 0.95, frame_corner_radius=20, double_click=False,
-                 resize=False, frame_border_color=None, text_color=None, autocomplete=False,
+                 frame_border_color=None, text_color=None, autocomplete=False,
                  hover_color=None, pagination: bool = True, items_per_page: int = 50,
                  groups=None, **button_kwargs):
         super().__init__(master=attach.winfo_toplevel(), takefocus=1)
@@ -139,12 +139,14 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         else:
             self.button_container = self.frame
         self.dummy_entry = customtkinter.CTkEntry(self.frame, fg_color="transparent", border_width=0, height=1, width=1)
-        self.height = height
-        self.height_new = height
+        self.is_height = bool(height)
+        if height is None:
+            self.height_new = attach.winfo_toplevel().winfo_height()
+        else:
+            self.height_new = height
         self.width = width
         self.command = command
         self.fade = False
-        self.resize = resize
         self.autocomplete = autocomplete
         self.var_update = customtkinter.StringVar()
         self.appear = True
@@ -342,13 +344,8 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         current_y_pos = self.winfo_y()
         self.x_pos = self.attach.winfo_rootx() if self.x is None else self.x + self.attach.winfo_rootx()
         self.width_new = self.attach.winfo_width() if self.width is None else self.width
-        if self.resize:
-            displayed_items = len(self.filtered_values) if self.filtered_values is not None else len(self.values)
-            if self.pagination:
-                displayed_items = min(displayed_items, self.items_per_page)
-            base_height = 50 if self.pagination else 35
-            items_height = displayed_items * self.button_height
-            self.height_new = items_height + base_height
+        if not self.is_height:
+            self.height_new = self.attach.winfo_toplevel().winfo_height()
         screen_height = self.winfo_screenheight()
         dropdown_bottom = self.attach.winfo_rooty() + self.height_new
         if dropdown_bottom > screen_height:
@@ -472,8 +469,7 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         if self.old_kwargs == kwargs:
             return
         if "height" in kwargs:
-            self.height = kwargs.pop("height")
-            self.height_new = self.height
+            self.height_new = kwargs.pop("height")
         if "alpha" in kwargs:
             self.alpha = kwargs.pop("alpha")
         if "width" in kwargs:
