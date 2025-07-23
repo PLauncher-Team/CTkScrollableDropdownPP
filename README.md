@@ -22,22 +22,30 @@ pip install ctkscrollabledropdownpp
 
 ```python
 import customtkinter as ctk
-from ctkscrollabledropdownpp import CTkScrollableDropdown
+from CTkScrollableDropdownPP import CTkScrollableDropdown
 
 app = ctk.CTk()
-btn = ctk.CTkButton(app, text='Select')
-btn.pack(pady=20)
+app.geometry("400x300")
+
+combobox = ctk.CTkComboBox(
+    master=app,
+    values=[],
+    width=200,
+    height=30
+)
+combobox.pack(pady=50)
 
 values = [f"Item {i}" for i in range(1, 101)]
 
 dropdown = CTkScrollableDropdown(
-    attach=btn,
+    attach=combobox,
     values=values,
     command=lambda v: print("Selected:", v),
-    items_per_page=20,
-    pagination=True,
     autocomplete=True,
-    groups=[('1-50', r'^Item [1-4]'), ('Others', '__OTHERS__')]
+    groups=[
+        ('1-50', r'^Item ([1-9]|[1-4][0-9]|50)$'),
+        ('Others', '__OTHERS__')
+    ],
 )
 
 app.mainloop()
