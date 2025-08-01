@@ -1,5 +1,7 @@
 # CTkScrollableDropdownPP
 
+[![PyPI Downloads](https://static.pepy.tech/badge/ctkscrollabledropdownpp)](https://pepy.tech/projects/ctkscrollabledropdownpp)
+
 **CTkScrollableDropdownPP** is an enhanced dropdown widget for CustomTkinter featuring pagination, live search, and grouping support.
 
 > Based on the original [CTkScrollableDropdown](https://github.com/Akascape/CTkScrollableDropdown) project.
