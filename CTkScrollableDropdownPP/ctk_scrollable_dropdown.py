@@ -39,7 +39,7 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         self.current_group = 0
         self.font = font
         self.groups = []
-        
+
         if groups is not None:
             for g in groups:
                 if isinstance(g, (list, tuple)) and len(g) >= 2:
@@ -160,7 +160,11 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         else:
             self.justify = "c"
         self.button_height = button_height
-        self.image_values = None if len(image_values) != len(self.values) else image_values
+        self.image_values = image_values
+        self.value_to_image = {}
+        if image_values and len(image_values) == len(values):
+            for val, img in zip(values, image_values):
+                self.value_to_image[val] = img
         self.resizable(width=False, height=False)
         self.transient(self.master)
         if double_click or isinstance(self.attach, customtkinter.CTkEntry) or isinstance(self.attach, customtkinter.CTkComboBox):
@@ -241,7 +245,7 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         for i, value in enumerate(values_list):
             if i in self.widgets:
                 btn, _ = self.widgets[i]
-                btn.configure(text=value, command=lambda v=value: self._attach_key_press(v))
+                btn.configure(text=value, command=lambda v=value: self._attach_key_press(v), image=self.value_to_image.get(value))
                 btn.pack(fill="x", pady=2, padx=(self.padding, 0))
                 self.widgets[i][1] = True
             else:
@@ -254,7 +258,8 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
                     fg_color=self.button_color,
                     text_color=self.text_color,
                     anchor=self.justify,
-                    hover_color=self.hover_color
+                    hover_color=self.hover_color,
+                    image=self.value_to_image.get(value)
                 )
                 btn.pack(fill="x", pady=2, padx=(self.padding, 0))
                 self.widgets[i] = [btn, True]
@@ -449,7 +454,7 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         index = len(self.values)
         if index in self.widgets:
             btn, _ = self.widgets[index]
-            btn.configure(text=value, command=lambda v=value: self._attach_key_press(v))
+            btn.configure(text=value, command=lambda v=value: self._attach_key_press(v), image=self.value_to_image.get(value))
             btn.pack(fill="x", pady=2, padx=(self.padding, 0))
             self.widgets[index][1] = True
         else:
@@ -461,8 +466,9 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
                                           hover_color=self.hover_color,
                                           anchor=self.justify,
                                           command=lambda v=value: self._attach_key_press(v),
-                                          width=0
-                                                **kwargs)
+                                          image=self.value_to_image.get(value),
+                                          width=0,
+                                          *kwargs)
             btn.pack(fill="x", pady=2, padx=(self.padding, 0))
             self.widgets[index] = [btn, True]
         self.values.append(value)
@@ -556,11 +562,17 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
             self.current_group = 0
             self.switch_group(self.current_group)
         if "image_values" in kwargs:
-            self.image_values = kwargs.pop("image_values")
-            self.image_values = None if len(self.image_values) != len(self.values) else self.image_values
-            if self.image_values is not None:
-                for i in range(len(self.values)):
-                    self.widgets[i][0].configure(image=self.image_values[i])
+            image_values_arg = kwargs.pop("image_values")
+            self.image_values = image_values_arg
+            self.value_to_image = {}
+
+            if image_values_arg and len(image_values_arg) == len(self.values):
+                for val, img in zip(self.values, image_values_arg):
+                    self.value_to_image[val] = img
+
+            for key, (btn, visible) in self.widgets.items():
+                current_value = btn.cget("text")
+                btn.configure(image=self.value_to_image.get(current_value))
         if "button_color" in kwargs:
             bc = kwargs.pop("button_color")
             for key in self.widgets:
