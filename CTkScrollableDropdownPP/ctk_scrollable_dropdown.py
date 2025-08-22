@@ -10,7 +10,7 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
                  command=None, image_values=[], alpha: float = 0.95, frame_corner_radius=20, double_click=False,
                  frame_border_color=None, text_color=None, autocomplete=False,
                  hover_color=None, pagination: bool = True, items_per_page: int = 50,
-                 groups=None, font=("Segoe UI", 12), **button_kwargs):
+                 groups=None, font=("Segoe UI", 12), fade_in_duration: bool = True, fps: int = 60, **button_kwargs):
         super().__init__(master=attach.winfo_toplevel(), takefocus=1)
 
         self.group_patterns = None
@@ -39,6 +39,10 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         self.current_group = 0
         self.font = font
         self.groups = []
+        self.fade_enabled = fade_in_duration
+        self.fps = max(1, int(fps))
+        self.fade_animation_duration = 0.25
+        self.animating = False
 
         if groups is not None:
             for g in groups:
@@ -188,7 +192,7 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         if self.autocomplete:
             self.bind_autocomplete()
         self.withdraw()
-        self.attributes("-alpha", self.alpha)
+        self.attributes("-alpha", 0)
         if self.groups:
             self.switch_group(0)
         self._init_buttons()
@@ -275,10 +279,13 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         self.after(500, self.destroy_popup)
 
     def _withdraw(self):
+        if self.animating:
+            return
         if not self.winfo_exists():
             return
         if self.winfo_viewable() and self.hide_flag:
-            self.withdraw()
+            self._animated_withdraw()
+            return
         self.event_generate("<<Closed>>")
         self.hide_flag = True
 
@@ -382,12 +389,17 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
                 or current_x_pos != self.x_pos
                 or current_y_pos != self.y_pos):
             self.geometry(f"{self.width_new}x{self.height_new}+{self.x_pos}+{self.y_pos}")
-            self.attributes('-alpha', self.alpha)
+            if self.fade_enabled:
+                self.attributes('-alpha', 0)
+            else:
+                self.attributes('-alpha', self.alpha)
             self.update_idletasks()
             if self.pagination:
                 self._update_pagination_buttons(filtered=bool(self.filtered_values))
 
     def _iconify(self):
+        if self.animating:
+            return
         if self.attach.cget("state") == "disabled":
             return
         if self.disable:
@@ -401,10 +413,12 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
             self.place_dropdown()
             self._deiconify()
         else:
-            self.withdraw()
+            self._animated_withdraw()
             self.hide_flag = True
 
     def _attach_key_press(self, k):
+        if self.animating:
+            return
         if hasattr(self, "search_var"):
             self.search_var.set("")
         self.event_generate("<<Selected>>")
@@ -418,11 +432,11 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
             if self.pagination:
                 self.pagination_frame.pack(fill="x", side="bottom")
         self.fade = False
-        self.withdraw()
+        self._animated_withdraw()
         self.hide_flag = True
 
     def live_update(self, string=None):
-        if self.disable or self.fade:
+        if self.disable or self.fade or self.animating:
             return
         self.frame._parent_canvas.yview_moveto(0)
         if string and string.strip() != "":
@@ -480,7 +494,14 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
 
     def _deiconify(self):
         if self.all_values:
-            self.deiconify()
+            if self.fade_enabled:
+                if self.animating:
+                    return
+                self.deiconify()
+                self._animate_fade_in()
+            else:
+                self.deiconify()
+                self.attributes('-alpha', self.alpha)
 
     def popup(self, x=None, y=None):
         self.x = x
@@ -582,3 +603,74 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
                 self.widgets[key][0].configure(**kwargs)
         self.old_kwargs = kwargs
         self.master.update()
+
+    def _animate_fade_in(self):
+        if not self.fade_enabled:
+            self.attributes('-alpha', self.alpha)
+            return
+        if self.animating:
+            return
+        self.animating = True
+        total_frames = max(1, int(self.fps * self.fade_animation_duration))
+        step = float(self.alpha) / total_frames
+        current = 0.0
+        interval = max(1, int(1000 / self.fps))
+        def step_fn(frame, value):
+            new_value = value + step
+            if new_value >= self.alpha or frame >= total_frames - 1:
+                try:
+                    self.attributes('-alpha', self.alpha)
+                finally:
+                    self.animating = False
+                return
+            try:
+                self.attributes('-alpha', new_value)
+            except Exception:
+                pass
+            self.after(interval, lambda: step_fn(frame + 1, new_value))
+        try:
+            self.attributes('-alpha', 0.0)
+        except Exception:
+            pass
+        step_fn(0, current)
+
+    def _animated_withdraw(self):
+        if not self.winfo_exists():
+            return
+        if not self.fade_enabled:
+            if self.winfo_viewable():
+                self.withdraw()
+            self.event_generate("<<Closed>>")
+            self.hide_flag = True
+            return
+        if self.animating:
+            return
+        self.animating = True
+        total_frames = max(1, int(self.fps * self.fade_animation_duration))
+        step = float(self.alpha) / total_frames
+        interval = max(1, int(1000 / self.fps))
+        current_alpha = None
+        try:
+            current_alpha = float(self.attributes('-alpha'))
+        except Exception:
+            current_alpha = self.alpha
+        def step_fn(frame, value):
+            new_value = value - step
+            if new_value <= 0 or frame >= total_frames - 1:
+                try:
+                    self.attributes('-alpha', 0.0)
+                finally:
+                    try:
+                        if self.winfo_viewable():
+                            self.withdraw()
+                    finally:
+                        self.event_generate("<<Closed>>")
+                        self.hide_flag = True
+                        self.animating = False
+                return
+            try:
+                self.attributes('-alpha', new_value)
+            except Exception:
+                pass
+            self.after(interval, lambda: step_fn(frame + 1, new_value))
+        step_fn(0, current_alpha)
