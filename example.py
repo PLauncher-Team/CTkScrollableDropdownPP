@@ -69,8 +69,6 @@ groups = [
 dropdown = CTkScrollableDropdown(
     attach=combobox,
     button_color="#2b2b2b",
-    height=200,
-    width=300,
     fg_color="#333333",
     values=all_values,
     command=lambda value: print(f"Selected: {value}"),
@@ -79,7 +77,8 @@ dropdown = CTkScrollableDropdown(
     hover_color="#3a3a3a",
     font=("Arial", 12),
     groups=groups,
-    items_per_page=10
+    items_per_page=10,
+    multiple=True
 )
 
 root.mainloop()

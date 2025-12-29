@@ -2,7 +2,7 @@
 
 [![PyPI Downloads](https://static.pepy.tech/badge/ctkscrollabledropdownpp)](https://pepy.tech/projects/ctkscrollabledropdownpp)
 
-**CTkScrollableDropdownPP** is an enhanced dropdown widget for CustomTkinter featuring pagination, live search, and grouping support.
+**CTkScrollableDropdownPP** is an enhanced dropdown widget for CustomTkinter featuring pagination, live search, grouping support, and multiple selection.
 
 > Based on the original [CTkScrollableDropdown](https://github.com/Akascape/CTkScrollableDropdown) project.
 
@@ -12,6 +12,7 @@
 * Real-time filtering
 * Grouped items (using regex or labels)
 * Autocomplete on typing
+* Multiple selection support
 * Fully customizable appearance
 
 ## Installation
@@ -97,7 +98,7 @@ groups = [
 dropdown = CTkScrollableDropdown(attach=combobox, button_color="#2b2b2b", height=200, width=300, fg_color="#333333",
                                  values=all_values, command=lambda value: print(f"Selected: {value}"),
                                  image_values=all_images, text_color="#ffffff", hover_color="#3a3a3a",
-                                 font=("Arial", 12), groups=groups, items_per_page=10)
+                                 font=("Arial", 12), groups=groups, items_per_page=10, multiple=True)
 
 root.mainloop()
 ```

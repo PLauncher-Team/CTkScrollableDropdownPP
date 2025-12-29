@@ -10,7 +10,8 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
                  command=None, image_values=[], alpha: float = 0.95, frame_corner_radius=20, double_click=False,
                  frame_border_color=None, text_color=None, autocomplete=False,
                  hover_color=None, pagination: bool = True, items_per_page: int = 50,
-                 groups=None, font=("Segoe UI", 12), fade_in_duration: bool = True, fps: int = 60, **button_kwargs):
+                 groups=None, font=("Segoe UI", 12), fade_in_duration: bool = True, fps: int = 60,
+                 multiple: bool = False, **button_kwargs):
         super().__init__(master=attach.winfo_toplevel(), takefocus=1)
 
         self.group_patterns = None
@@ -43,6 +44,8 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         self.fps = max(1, int(fps))
         self.fade_animation_duration = 0.25
         self.animating = False
+        self.multiple = multiple
+        self.selected_values = []
 
         if groups is not None:
             for g in groups:
@@ -245,11 +248,18 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         self.current_page = 0
         self._init_buttons()
 
+    def _update_button_appearance(self, btn, value):
+        if self.multiple and value in self.selected_values:
+            btn.configure(fg_color=self.hover_color)
+        else:
+            btn.configure(fg_color=self.button_color)
+
     def update_buttons(self, values_list):
         for i, value in enumerate(values_list):
             if i in self.widgets:
                 btn, _ = self.widgets[i]
                 btn.configure(text=value, command=lambda v=value: self._attach_key_press(v), image=self.value_to_image.get(value))
+                self._update_button_appearance(btn, value)
                 btn.pack(fill="x", pady=2, padx=(self.padding, 0))
                 self.widgets[i][1] = True
             else:
@@ -265,6 +275,7 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
                     hover_color=self.hover_color,
                     image=self.value_to_image.get(value)
                 )
+                self._update_button_appearance(btn, value)
                 btn.pack(fill="x", pady=2, padx=(self.padding, 0))
                 self.widgets[i] = [btn, True]
         i = len(values_list)
@@ -423,8 +434,20 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
             self.search_var.set("")
         self.event_generate("<<Selected>>")
         self.fade = True
-        if self.command:
-            self.command(k)
+        if self.multiple:
+            if k in self.selected_values:
+                self.selected_values.remove(k)
+            else:
+                self.selected_values.append(k)
+            for i, (btn, visible) in self.widgets.items():
+                if visible:
+                    value = btn.cget("text")
+                    self._update_button_appearance(btn, value)
+            if self.command:
+                self.command(self.selected_values)
+        else:
+            if self.command:
+                self.command(k)
         if hasattr(self, "search_var") and self.search_var.get().strip() != "":
             self.filtered_values = None
             self.current_page = 0
@@ -432,8 +455,9 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
             if self.pagination:
                 self.pagination_frame.pack(fill="x", side="bottom")
         self.fade = False
-        self._animated_withdraw()
-        self.hide_flag = True
+        if not self.multiple:
+            self._animated_withdraw()
+            self.hide_flag = True
 
     def live_update(self, string=None):
         if self.disable or self.fade or self.animating:
