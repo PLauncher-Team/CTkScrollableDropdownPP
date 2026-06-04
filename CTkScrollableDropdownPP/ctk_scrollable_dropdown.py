@@ -144,8 +144,9 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         if self.pagination:
             self.button_container = customtkinter.CTkFrame(self.frame, fg_color=self.fg_color)
             self.button_container.pack(expand=True, fill="both")
-            self.pagination_frame = customtkinter.CTkFrame(self.frame, fg_color=self.fg_color)
-            self.pagination_frame.pack(fill="x", side="bottom")
+        
+            self.pagination_frame = customtkinter.CTkFrame(self, fg_color=self.fg_color)
+            self.pagination_frame.pack(fill="x", pady=(3, 0))
         else:
             self.button_container = self.frame
         self.dummy_entry = customtkinter.CTkEntry(self.frame, fg_color="transparent", border_width=0, height=1, width=1)
@@ -336,9 +337,7 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         total_pages = (len(values_list) + self.items_per_page - 1) // self.items_per_page
         button_width = 30
         button_padding = 4
-        available_width = self.pagination_frame.winfo_width() if self.pagination_frame.winfo_ismapped() else self.width_new
-        if available_width < 1:
-            available_width = self.attach.winfo_width() if self.width is None else self.width
+        available_width = self.pagination_frame.winfo_width() or self.width_new or self.attach.winfo_width() or 200
         max_buttons_per_row = max(1, available_width // (button_width + button_padding))
         total_rows = (total_pages + max_buttons_per_row - 1) // max_buttons_per_row
         for row in range(total_rows):
@@ -363,20 +362,17 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
 
     def _change_page(self, page_index):
         self.current_page = page_index
-        if self.filtered_values is not None:
-            values_to_show = self.filtered_values[self.current_page * self.items_per_page:
-                                                  (self.current_page + 1) * self.items_per_page]
-        else:
+        if self.filtered_values is None:
             values_to_show = self.values[self.current_page * self.items_per_page:
                                          (self.current_page + 1) * self.items_per_page]
             self.update_buttons(values_to_show)
             self._update_pagination_buttons(filtered=bool(self.filtered_values))
             self.frame.update_idletasks()
-            self.frame._parent_canvas.yview_moveto(len(values_to_show) / self.items_per_page)
+            self.frame._parent_canvas.yview_moveto(0)
 
     def destroy_popup(self):
-        self.destroy()
-        self.disable = True
+            self.destroy()
+            self.disable = True
 
     def place_dropdown(self):
         if not self.winfo_exists():
@@ -453,7 +449,7 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
             self.current_page = 0
             self._init_buttons()
             if self.pagination:
-                self.pagination_frame.pack(fill="x", side="bottom")
+                self.pagination_frame.pack(fill="x", pady=(3, 0))
         self.fade = False
         if not self.multiple:
             self._animated_withdraw()
@@ -477,11 +473,11 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
                 values_to_show = filtered
             self.update_buttons(values_to_show)
             if self.pagination:
-                self.pagination_frame.pack(fill="x", side="bottom")
+                self.pagination_frame.pack(fill="x", pady=(3, 0))
             self.place_dropdown()
         else:
             if self.pagination:
-                self.pagination_frame.pack(fill="x", side="bottom")
+                self.pagination_frame.pack(fill="x", pady=(3, 0))
             self.filtered_values = None
             self.current_page = 0
             self._init_buttons()
