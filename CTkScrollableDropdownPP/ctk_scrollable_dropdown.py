@@ -46,6 +46,7 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         self.animating = False
         self.multiple = multiple
         self.selected_values = []
+        self.is_built = False
 
         if groups is not None:
             for g in groups:
@@ -106,55 +107,27 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         if not scrollbar:
             self.scroll_button_color = self.fg_color
             self.scroll_hover_color = self.fg_color
-        if self.pagination:
-            self.search_var = customtkinter.StringVar()
-            self.search_var.trace_add('write', lambda *args: self.live_update(self.search_var.get()))
-            self.search_entry = customtkinter.CTkEntry(self, textvariable=self.search_var)
-            self.search_entry.pack(fill="x", pady=(0, 5))
-        if self.groups:
-            self.group_frame = customtkinter.CTkFrame(self, fg_color=self.fg_color, bg_color=self.transparent_color)
-            self.group_frame.pack(fill="x", padx=5, pady=(0, 5))
-            self.group_buttons = []
-            for idx, name in enumerate(self.group_names):
-                btn = customtkinter.CTkButton(
-                    self.group_frame,
-                    text=name,
-                    font=self.font,
-                    height=button_height,
-                    fg_color=self.button_color,
-                    text_color=self.text_color,
-                    hover_color=self.hover_color,
-                    command=lambda i=idx: self.switch_group(i),
-                )
-                self.group_buttons.append(btn)
-            self.group_frame.bind("<Configure>", self._on_group_frame_configure, add="+")
-            self.group_button_colors = [btn.cget("fg_color") for btn in self.group_buttons]
-        self.frame = customtkinter.CTkScrollableFrame(
-            self,
-            bg_color=self.transparent_color,
-            fg_color=self.fg_color,
-            scrollbar_button_hover_color=self.scroll_hover_color,
-            corner_radius=self.corner,
-            border_width=frame_border_width,
-            scrollbar_button_color=self.scroll_button_color,
-            border_color=self.frame_border_color
-        )
-        self.frame._scrollbar.grid_configure(padx=3)
-        self.frame.pack(expand=True, fill="both", pady=(3, 0))
-        if self.pagination:
-            self.button_container = customtkinter.CTkFrame(self.frame, fg_color=self.fg_color)
-            self.button_container.pack(expand=True, fill="both")
-        
-            self.pagination_frame = customtkinter.CTkFrame(self, fg_color=self.fg_color)
-            self.pagination_frame.pack(fill="x", pady=(3, 0))
+
+        self.resizable(width=False, height=False)
+        self.transient(self.master)
+        if double_click or isinstance(self.attach, customtkinter.CTkEntry) or isinstance(self.attach, customtkinter.CTkComboBox):
+            self.attach.bind('<Double-Button-1>', lambda e: self._iconify(), add="+")
         else:
-            self.button_container = self.frame
-        self.dummy_entry = customtkinter.CTkEntry(self.frame, fg_color="transparent", border_width=0, height=1, width=1)
-        self.is_height = bool(height)
-        if height is None:
-            self.height_new = attach.winfo_toplevel().winfo_height()
-        else:
-            self.height_new = height
+            self.attach.bind('<Button-1>', lambda e: self._iconify(), add="+")
+        if isinstance(self.attach, customtkinter.CTkComboBox):
+            self.attach._canvas.tag_bind("right_parts", "<Button-1>", lambda e: self._iconify())
+            self.attach._canvas.tag_bind("dropdown_arrow", "<Button-1>", lambda e: self._iconify())
+            if self.command is None:
+                self.command = self.attach.set
+        if isinstance(self.attach, customtkinter.CTkOptionMenu):
+            self.attach._canvas.bind("<Button-1>", lambda e: self._iconify())
+            self.attach._text_label.bind("<Button-1>", lambda e: self._iconify())
+            if self.command is None:
+                self.command = self.attach.set
+        self.attach.bind("<Destroy>", lambda _: self._withdraw(), add="+")
+        self.update_idletasks()
+        self.x = x
+        self.y = y
         self.width = width
         self.command = command
         self.fade = False
@@ -173,33 +146,94 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         if image_values and len(image_values) == len(values):
             for val, img in zip(values, image_values):
                 self.value_to_image[val] = img
-        self.resizable(width=False, height=False)
-        self.transient(self.master)
-        if double_click or isinstance(self.attach, customtkinter.CTkEntry) or isinstance(self.attach, customtkinter.CTkComboBox):
-            self.attach.bind('<Double-Button-1>', lambda e: self._iconify(), add="+")
+
+        self.is_height = bool(height)
+        if height is None:
+            self.height_new = 10
         else:
-            self.attach.bind('<Button-1>', lambda e: self._iconify(), add="+")
-        if isinstance(self.attach, customtkinter.CTkComboBox):
-            self.attach._canvas.tag_bind("right_parts", "<Button-1>", lambda e: self._iconify())
-            self.attach._canvas.tag_bind("dropdown_arrow", "<Button-1>", lambda e: self._iconify())
-            if self.command is None:
-                self.command = self.attach.set
-        if isinstance(self.attach, customtkinter.CTkOptionMenu):
-            self.attach._canvas.bind("<Button-1>", lambda e: self._iconify())
-            self.attach._text_label.bind("<Button-1>", lambda e: self._iconify())
-            if self.command is None:
-                self.command = self.attach.set
-        self.attach.bind("<Destroy>", lambda _: self._destroy(), add="+")
-        self.update_idletasks()
-        self.x = x
-        self.y = y
+            self.height_new = height
+
         if self.autocomplete:
             self.bind_autocomplete()
+
+        self._build_ui()
+
         self.withdraw()
         self.attributes("-alpha", 0)
         if self.groups:
             self.switch_group(0)
         self._init_buttons()
+        self.is_built = True
+
+    def _build_ui(self):
+        if self.is_built:
+            return
+
+        if self.pagination:
+            if not hasattr(self, 'search_var'):
+                self.search_var = customtkinter.StringVar()
+                self.search_var.trace_add('write', lambda *args: self.live_update(self.search_var.get()))
+            if not hasattr(self, 'search_entry'):
+                self.search_entry = customtkinter.CTkEntry(self, textvariable=self.search_var)
+                self.search_entry.pack(fill="x", pady=(0, 5))
+    
+        if self.groups:
+            if not hasattr(self, 'group_frame'):
+                self.group_frame = customtkinter.CTkFrame(self, fg_color=self.fg_color, bg_color=self.transparent_color)
+                self.group_frame.pack(fill="x", padx=5, pady=(0, 5))
+            if not hasattr(self, 'group_buttons'):
+                self.group_buttons = []
+                for idx, name in enumerate(self.group_names):
+                    btn = customtkinter.CTkButton(
+                        self.group_frame,
+                        text=name,
+                        font=self.font,
+                        height=self.button_height,
+                        fg_color=self.button_color,
+                        text_color=self.text_color,
+                        hover_color=self.hover_color,
+                        command=lambda i=idx: self.switch_group(i),
+                    )
+                    self.group_buttons.append(btn)
+                self.group_frame.bind("<Configure>", self._on_group_frame_configure, add="+")
+                self.group_button_colors = [btn.cget("fg_color") for btn in self.group_buttons]
+    
+        if self.pagination:
+            if not hasattr(self, 'pagination_frame'):
+                self.pagination_frame = customtkinter.CTkFrame(self, fg_color=self.fg_color)
+                self.pagination_frame.pack(fill="x", pady=(3, 0), side="bottom")
+            if not hasattr(self, 'scroll_frame'):
+                self.scroll_frame = customtkinter.CTkScrollableFrame(
+                    self,
+                    bg_color=self.transparent_color,
+                    fg_color=self.fg_color,
+                    scrollbar_button_hover_color=self.scroll_hover_color,
+                    corner_radius=self.corner,
+                    border_width=0,
+                    scrollbar_button_color=self.scroll_button_color,
+                    border_color=self.frame_border_color
+                )
+                self.scroll_frame._scrollbar.grid_configure(padx=3)
+                self.scroll_frame.pack(expand=True, fill="both", pady=(3, 0), side="top")
+            if not hasattr(self, 'button_container'):
+                self.button_container = customtkinter.CTkFrame(self.scroll_frame, fg_color=self.fg_color)
+                self.button_container.pack(expand=True, fill="both")
+        else:
+            if not hasattr(self, 'scroll_frame'):
+                self.scroll_frame = customtkinter.CTkScrollableFrame(
+                    self,
+                    bg_color=self.transparent_color,
+                    fg_color=self.fg_color,
+                    scrollbar_button_hover_color=self.scroll_hover_color,
+                    corner_radius=self.corner,
+                    border_width=0,
+                    scrollbar_button_color=self.scroll_button_color,
+                    border_color=self.frame_border_color
+                )
+                self.scroll_frame._scrollbar.grid_configure(padx=3)
+                self.scroll_frame.pack(expand=True, fill="both", pady=(3, 0))
+            if not hasattr(self, 'button_container'):
+                self.button_container = self.scroll_frame
 
     def _on_group_frame_configure(self, event):
         if not self.group_buttons:
@@ -247,6 +281,9 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
                 btn.configure(fg_color=self.group_button_colors[i])
         self.filtered_values = None
         self.current_page = 0
+        if hasattr(self, "search_var") and self.search_var.get().strip() != "":
+            string = self.search_var.get().lower()
+            self.filtered_values = [val for val in self.values if string in val.lower()]
         self._init_buttons()
 
     def _update_button_appearance(self, btn, value):
@@ -287,9 +324,6 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
                 self.widgets[i][1] = False
             i += 1
 
-    def _destroy(self):
-        self.after(500, self.destroy_popup)
-
     def _withdraw(self):
         if self.animating:
             return
@@ -320,89 +354,102 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
 
     def _init_buttons(self):
         if self.pagination:
-            values_to_show = self.values[self.current_page * self.items_per_page:
-                                         (self.current_page + 1) * self.items_per_page]
-            self._update_pagination_buttons()
+            self.scroll_frame.update_idletasks()
+            if self.filtered_values is not None:
+                values_to_show = self.filtered_values[self.current_page * self.items_per_page:
+                                                      (self.current_page + 1) * self.items_per_page]
+            else:
+                values_to_show = self.values[self.current_page * self.items_per_page:
+                                             (self.current_page + 1) * self.items_per_page]
+            self._update_pagination_buttons(filtered=bool(self.filtered_values))
+            self.pagination_frame.update_idletasks()
         else:
             values_to_show = self.values
         self.update_buttons(values_to_show)
-        self.frame._parent_canvas.yview_moveto(0)
+        self.scroll_frame._parent_canvas.yview_moveto(0)
 
     def _update_pagination_buttons(self, filtered=False):
         if not self.pagination:
             return
-        for child in self.pagination_frame.winfo_children():
-            child.destroy()
         values_list = self.filtered_values if (filtered and self.filtered_values is not None) else self.values
         total_pages = (len(values_list) + self.items_per_page - 1) // self.items_per_page
         button_width = 30
         button_padding = 4
-        available_width = self.pagination_frame.winfo_width() or self.width_new or self.attach.winfo_width() or 200
+        available_width = self.width_new or self.attach.winfo_width() or 200
         max_buttons_per_row = max(1, available_width // (button_width + button_padding))
         total_rows = (total_pages + max_buttons_per_row - 1) // max_buttons_per_row
-        for row in range(total_rows):
-            for col in range(max_buttons_per_row):
-                page_index = row * max_buttons_per_row + col
-                if page_index >= total_pages:
-                    break
-                state = "disabled" if page_index == self.current_page else "normal"
-                btn = customtkinter.CTkButton(
-                    self.pagination_frame,
-                    text=str(page_index + 1),
-                    width=button_width,
-                    height=30,
-                    fg_color=self.button_color,
-                    text_color=self.text_color,
-                    command=lambda p=page_index: self._change_page(p),
-                    state=state
-                )
+        needed_buttons = total_pages
+        existing_buttons = list(self.pagination_frame.winfo_children())
+        for i, btn in enumerate(existing_buttons):
+            if i < needed_buttons:
+                row = i // max_buttons_per_row
+                col = i % max_buttons_per_row
+                state = "disabled" if i == self.current_page else "normal"
+                btn.configure(text=str(i + 1), state=state, command=lambda p=i: self._change_page(p))
                 btn.grid(row=row, column=col, padx=2, pady=2, sticky="ew")
+            else:
+                btn.grid_forget()
+        for i in range(len(existing_buttons), needed_buttons):
+            row = i // max_buttons_per_row
+            col = i % max_buttons_per_row
+            state = "disabled" if i == self.current_page else "normal"
+            btn = customtkinter.CTkButton(
+                self.pagination_frame,
+                text=str(i + 1),
+                width=button_width,
+                height=30,
+                fg_color=self.button_color,
+                text_color=self.text_color,
+                command=lambda p=i: self._change_page(p),
+                state=state
+            )
+            btn.grid(row=row, column=col, padx=2, pady=2, sticky="ew")
         for col in range(max_buttons_per_row):
             self.pagination_frame.grid_columnconfigure(col, weight=1)
 
     def _change_page(self, page_index):
         self.current_page = page_index
-        if self.filtered_values is None:
-            values_to_show = self.values[self.current_page * self.items_per_page:
-                                         (self.current_page + 1) * self.items_per_page]
-            self.update_buttons(values_to_show)
-            self._update_pagination_buttons(filtered=bool(self.filtered_values))
-            self.frame.update_idletasks()
-            self.frame._parent_canvas.yview_moveto(0)
-
-    def destroy_popup(self):
-            self.destroy()
-            self.disable = True
+        values_list = self.filtered_values if self.filtered_values is not None else self.values
+        values_to_show = values_list[self.current_page * self.items_per_page:
+                                     (self.current_page + 1) * self.items_per_page]
+        self.update_buttons(values_to_show)
+        self.scroll_frame.update_idletasks()
+        self._update_pagination_buttons(filtered=bool(self.filtered_values))
+        self.scroll_frame._parent_canvas.yview_moveto(0)
 
     def place_dropdown(self):
         if not self.winfo_exists():
             return
-        current_width = self.winfo_width()
-        current_height = self.winfo_height()
-        current_x_pos = self.winfo_x()
-        current_y_pos = self.winfo_y()
         self.x_pos = self.attach.winfo_rootx() if self.x is None else self.x + self.attach.winfo_rootx()
         self.width_new = self.attach.winfo_width() if self.width is None else self.width
+    
         if not self.is_height:
-            self.height_new = self.attach.winfo_toplevel().winfo_height()
+            needed_height = 10
+            if hasattr(self, 'search_entry') and self.search_entry.winfo_exists():
+                needed_height += self.search_entry.winfo_reqheight() + 5
+            if self.groups and hasattr(self, 'group_frame') and self.group_frame.winfo_exists():
+                needed_height += self.group_frame.winfo_reqheight() + 5
+            if self.pagination and hasattr(self, 'pagination_frame') and self.pagination_frame.winfo_exists():
+                needed_height += self.pagination_frame.winfo_reqheight() + 5
+            needed_height += min(len(self.values) if self.filtered_values is None else len(self.filtered_values), self.items_per_page) * (self.button_height + 4) + 10
+            screen_height = self.winfo_screenheight()
+            available = screen_height - self.attach.winfo_rooty() - self.attach.winfo_height() - 20
+            available_above = self.attach.winfo_rooty() - 20
+            max_available = max(available, available_above)
+            self.height_new = min(needed_height, max_available, 500)
+        else:
+            self.height_new = self.height_new
+    
         screen_height = self.winfo_screenheight()
         dropdown_bottom = self.attach.winfo_rooty() + self.height_new
         if dropdown_bottom > screen_height:
             self.y_pos = max(0, self.attach.winfo_rooty() - self.height_new)
         else:
             self.y_pos = self.attach.winfo_rooty() + self.attach.winfo_height()
-        if (current_width != self.width_new
-                or current_height != self.height_new
-                or current_x_pos != self.x_pos
-                or current_y_pos != self.y_pos):
-            self.geometry(f"{self.width_new}x{self.height_new}+{self.x_pos}+{self.y_pos}")
-            if self.fade_enabled:
-                self.attributes('-alpha', 0)
-            else:
-                self.attributes('-alpha', self.alpha)
-            self.update_idletasks()
-            if self.pagination:
-                self._update_pagination_buttons(filtered=bool(self.filtered_values))
+        self.geometry(f"{self.width_new}x{self.height_new}+{self.x_pos}+{self.y_pos}")
+        self.update_idletasks()
+        if self.pagination:
+            self._update_pagination_buttons(filtered=bool(self.filtered_values))
 
     def _iconify(self):
         if self.animating:
@@ -458,7 +505,7 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
     def live_update(self, string=None):
         if self.disable or self.fade or self.animating:
             return
-        self.frame._parent_canvas.yview_moveto(0)
+        self.scroll_frame._parent_canvas.yview_moveto(0)
         if string and string.strip() != "":
             string = string.lower()
             filtered = [val for val in self.values if string in val.lower()]
@@ -474,15 +521,13 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
             self.update_buttons(values_to_show)
             if self.pagination:
                 self.pagination_frame.pack(fill="x", pady=(3, 0))
-            self.place_dropdown()
         else:
             if self.pagination:
                 self.pagination_frame.pack(fill="x", pady=(3, 0))
             self.filtered_values = None
             self.current_page = 0
             self._init_buttons()
-            self.place_dropdown()
-            self.appear = False
+        self.appear = False
 
     def insert(self, value, **kwargs):
         index = len(self.values)
@@ -542,11 +587,14 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         if "width" in kwargs:
             self.width = kwargs.pop("width")
         if "fg_color" in kwargs:
-            self.frame.configure(fg_color=kwargs.pop("fg_color"))
+            self.scroll_frame.configure(fg_color=kwargs.pop("fg_color"))
         if "values" in kwargs:
             self.all_values = kwargs.pop("values")
             self.values = self.all_values.copy()
-            self.image_values = None
+            self.value_to_image = {}
+            if self.image_values and len(self.image_values) == len(self.all_values):
+                for val, img in zip(self.all_values, self.image_values):
+                    self.value_to_image[val] = img
             self.current_page = 0
             self._init_buttons()
             if hasattr(self, "search_var"):
