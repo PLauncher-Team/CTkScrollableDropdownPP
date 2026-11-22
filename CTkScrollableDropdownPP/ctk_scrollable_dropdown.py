@@ -23,6 +23,7 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         self.lift()
         self.alpha = alpha
         self.attach = attach
+        self.command = command
         self.corner = frame_corner_radius
         self.padding = 0
         self.focus_something = False
@@ -129,7 +130,6 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         self.x = x
         self.y = y
         self.width = width
-        self.command = command
         self.fade = False
         self.autocomplete = autocomplete
         self.var_update = customtkinter.StringVar()
