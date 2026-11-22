@@ -95,7 +95,7 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         self.hide_flag = True
         self.attach.bind('<Configure>', lambda e: self._withdraw() if not self.disable else None, add="+")
         self.attach.winfo_toplevel().bind('<Configure>', lambda e: self._withdraw() if not self.disable else None, add="+")
-        self.attach.winfo_toplevel().bind("<ButtonPress>", lambda e: self._withdraw() if not self.disable else None, add="+")
+        self.attach.winfo_toplevel().bind("<ButtonPress>", self._on_toplevel_button_press, add="+")
         self.bind("<Escape>", lambda e: self._withdraw() if not self.disable else None, add="+")
         self.attributes('-alpha', 0)
         self.fg_color = customtkinter.ThemeManager.theme["CTkFrame"]["fg_color"] if fg_color is None else fg_color
@@ -324,6 +324,16 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
                 self.widgets[i][1] = False
             i += 1
 
+    def _on_toplevel_button_press(self, event):
+        if self.disable:
+            return
+        widget = event.widget
+        while widget is not None:
+            if widget is self.attach:
+                return
+            widget = getattr(widget, "master", None)
+        self._withdraw()
+
     def _withdraw(self):
         if self.animating:
             return
@@ -424,14 +434,26 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         self.width_new = self.attach.winfo_width() if self.width is None else self.width
     
         if not self.is_height:
-            needed_height = 10
+            self.update_idletasks()
+            needed_height = 20
             if hasattr(self, 'search_entry') and self.search_entry.winfo_exists():
                 needed_height += self.search_entry.winfo_reqheight() + 5
             if self.groups and hasattr(self, 'group_frame') and self.group_frame.winfo_exists():
                 needed_height += self.group_frame.winfo_reqheight() + 5
             if self.pagination and hasattr(self, 'pagination_frame') and self.pagination_frame.winfo_exists():
                 needed_height += self.pagination_frame.winfo_reqheight() + 5
-            needed_height += min(len(self.values) if self.filtered_values is None else len(self.filtered_values), self.items_per_page) * (self.button_height + 4) + 10
+            visible_count = min(
+                len(self.values) if self.filtered_values is None else len(self.filtered_values),
+                self.items_per_page
+            )
+            visible_buttons_height = sum(
+                button.winfo_reqheight() + 4
+                for button, visible in self.widgets.values()
+                if visible
+            )
+            minimum_row_height = self.button_height + 4
+            content_height = max(visible_buttons_height, minimum_row_height if visible_count else 0)
+            needed_height += content_height + 16
             screen_height = self.winfo_screenheight()
             available = screen_height - self.attach.winfo_rooty() - self.attach.winfo_height() - 20
             available_above = self.attach.winfo_rooty() - 20
